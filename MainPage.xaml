@@ -1,0 +1,97 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="YTPlayer.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:models="clr-namespace:DownloadMusic.Models"
+    xmlns:viewmodels="clr-namespace:YTPlayer.ViewModels"
+    x:DataType="viewmodels:MainPageViewModel">
+
+    <ScrollView>
+        <Grid RowDefinitions="*,*">
+            <HorizontalStackLayout>
+                <Image HeightRequest="100" WidthRequest="100">
+                    <Image.Source>
+                        <FileImageSource File="jm9aqrttxs181.gif" />
+                    </Image.Source>
+                </Image>
+            </HorizontalStackLayout>
+
+            <Grid Grid.Row="1" ColumnDefinitions="2*,auto">
+                <Entry
+                    Grid.Column="0"
+                    BackgroundColor="White"
+                    HeightRequest="20"
+                    Text="{Binding Link}"
+                    TextColor="Black" />
+
+                <Grid
+                    Grid.Column="1"
+                    BackgroundColor="Black"
+                    ColumnDefinitions="auto,auto,auto,auto,auto">
+
+                    <Button
+                        Grid.Column="0"
+                        BackgroundColor="Transparent"
+                        BorderColor="Transparent"
+                        Command="{Binding AddToQueueCommand}">
+                        <Button.ImageSource>
+                            <FontImageSource
+                                FontFamily="MaterialOutlined"
+                                Glyph="&#xe03b;"
+                                Color="White" />
+                        </Button.ImageSource>
+                    </Button>
+
+                    <Button
+                        x:Name="PlayOrPauseButton"
+                        Grid.Column="1"
+                        BackgroundColor="Transparent"
+                        BorderColor="Transparent"
+                        Command="{Binding PlayMusicCommand}">
+                        <Button.ImageSource>
+                            <FontImageSource
+                                FontFamily="MaterialOutlined"
+                                Glyph="{Binding DesiredGlyph}"
+                                Color="White" />
+                        </Button.ImageSource>
+                    </Button>
+
+                    <Button
+                        Grid.Column="2"
+                        BackgroundColor="Transparent"
+                        Command="{Binding PlayPreviousCommand}">
+                        <Button.ImageSource>
+                            <FontImageSource
+                                FontFamily="MaterialOutlined"
+                                Glyph="&#xe045;"
+                                Color="White" />
+                        </Button.ImageSource>
+                    </Button>
+
+                    <Button
+                        Grid.Column="3"
+                        BackgroundColor="Transparent"
+                        Command="{Binding PlayNextCommand}">
+                        <Button.ImageSource>
+                            <FontImageSource
+                                FontFamily="MaterialOutlined"
+                                Glyph="&#xe044;"
+                                Color="White" />
+                        </Button.ImageSource>
+                    </Button>
+
+                    <Button Grid.Column="4" BackgroundColor="Transparent">
+                        <Button.ImageSource>
+                            <FontImageSource
+                                FontFamily="MaterialOutlined"
+                                Glyph="&#xe047;"
+                                Color="White" />
+                        </Button.ImageSource>
+                    </Button>
+                </Grid>
+            </Grid>
+        </Grid>
+    </ScrollView>
+
+</ContentPage>
