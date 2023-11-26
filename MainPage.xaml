@@ -81,7 +81,10 @@
                         </Button.ImageSource>
                     </Button>
 
-                    <Button Grid.Column="4" BackgroundColor="Transparent">
+                    <Button
+                        Grid.Column="4"
+                        BackgroundColor="Transparent"
+                        Command="{Binding StopCommand}">
                         <Button.ImageSource>
                             <FontImageSource
                                 FontFamily="MaterialOutlined"

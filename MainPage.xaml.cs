@@ -1,24 +1,39 @@
 ﻿using DownloadMusic;
 using YTPlayer.ViewModels;
+using static DownloadMusic.Utility;
 
 namespace YTPlayer
 {
-    public partial class MainPage : ContentPage
-    {
-        public MainPage()
-        {
-            InitializeComponent();
+	public partial class MainPage : ContentPage
+	{
+		MainPageViewModel mainPageViewModel;
+		public MainPage()
+		{
+			InitializeComponent();
 
-            MainPageViewModel mainPageViewModel = new MainPageViewModel();
-            mainPageViewModel.WorkCompleted += Template_WorkCompleted;
+			mainPageViewModel = new MainPageViewModel();
 
-            //PlayOrPauseButton.comm
+			mainPageViewModel.WorkCompleted += Template_WorkCompleted;
+			mainPageViewModel.SetUpFinished += MainPageViewModel_SetUpFinished;
 
-            BindingContext = mainPageViewModel;
+			BindingContext = mainPageViewModel;
 
-        }
-        private async Task Alarm(string title, string message) => await DisplayAlert(title, message, "Ok");
-        private async void Template_WorkCompleted(object sender, Utility.StringArgs e) => await Alarm("", e.Title);
+		}
 
-    }
+		private void MainPageViewModel_SetUpFinished(object sender, StringArgs e)
+		{
+			if (e.Title == "Pause")
+			{
+				PlayOrPauseButton.Command = mainPageViewModel.PauseCommand;
+			}
+			else if (e.Title == "Resume")
+			{
+				PlayOrPauseButton.Command = mainPageViewModel.ResumeCommand;
+			}
+		}
+
+		private async Task Alarm(string title, string message) => await DisplayAlert(title, message, "Ok");
+		private async void Template_WorkCompleted(object sender, StringArgs e) => await Alarm("", e.Title);
+
+	}
 }
