@@ -1,10 +1,12 @@
 ﻿namespace DownloadMusic.Models
 {
-    public class Video
-    {
-        public string title { get; set; }
-        public string link { get; set; }
-        public string length { get; set; }
-        public string size { get; set; }
-    }
+	public class Video
+	{
+		public string Title { get; set; }
+		public string Author { get; set; }
+		public string[] Thumbnails { get; set; }
+		public string Length { get; set; }
+		public string Views { get; set; }
+		public string When{ get; set; }
+	}
 }

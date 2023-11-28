@@ -6,7 +6,7 @@ namespace YTPlayer
 {
 	public partial class MainPage : ContentPage
 	{
-		MainPageViewModel mainPageViewModel;
+		readonly MainPageViewModel mainPageViewModel;
 		public MainPage()
 		{
 			InitializeComponent();
@@ -17,7 +17,6 @@ namespace YTPlayer
 			mainPageViewModel.SetUpFinished += MainPageViewModel_SetUpFinished;
 
 			BindingContext = mainPageViewModel;
-
 		}
 
 		private void MainPageViewModel_SetUpFinished(object sender, StringArgs e)
@@ -35,5 +34,9 @@ namespace YTPlayer
 		private async Task Alarm(string title, string message) => await DisplayAlert(title, message, "Ok");
 		private async void Template_WorkCompleted(object sender, StringArgs e) => await Alarm("", e.Title);
 
+		private void Slider_ValueChanged(object sender, ValueChangedEventArgs e)
+		{
+			//mainPageViewModel.
+		}
 	}
 }

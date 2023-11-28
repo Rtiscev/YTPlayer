@@ -1,13 +1,13 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using DownloadMusic.Models;
+using NAudio.Utils;
+using NAudio.Wave;
+using QuickType;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using NAudio.Wave;
-using static DownloadMusic.Utility;
 using System.Text;
-using NAudio.Utils;
-using QuickType;
+using static DownloadMusic.Utility;
 
 
 // &#xe037
@@ -17,13 +17,13 @@ namespace YTPlayer.ViewModels
 	public partial class MainPageViewModel : ObservableObject
 	{
 		#region General elements
-
 		enum CommandState
 		{
 			Play, Pause, Next, Previous, Stop
 		}
 		struct QueueStruct
 		{
+			public int id { get; set; }
 			public string videoID { get; set; }
 			public bool isDownloaded { get; set; }
 
@@ -34,6 +34,7 @@ namespace YTPlayer.ViewModels
 		}
 		public event EventHandler<StringArgs> WorkCompleted;
 		public event EventHandler<StringArgs> SetUpFinished;
+
 		string downloadLocation;
 		string ytdlpLocation;
 		string ffmpegLocation;
@@ -42,6 +43,7 @@ namespace YTPlayer.ViewModels
 		bool isPaused;
 		bool isDownloadStarted;
 		bool isFirstLaunch;
+
 		WasapiOut outputDevice;
 		LinkedList<QueueStruct> playList;
 		LinkedListNode<QueueStruct> currentNode;
@@ -69,6 +71,24 @@ namespace YTPlayer.ViewModels
 		Color desiredColor;
 		[ObservableProperty]
 		ObservableCollection<Links> linksDetails;
+		[ObservableProperty]
+		string nowPlaying;
+		[ObservableProperty]
+		string currentImage;
+		[ObservableProperty]
+		string currentTime;
+		[ObservableProperty]
+		int playingTime;
+		[ObservableProperty]
+		string totalTime;
+		[ObservableProperty]
+		int currentPosition;
+		[ObservableProperty]
+		int totalDuration;
+		[ObservableProperty]
+		TimeSpan test;
+		[ObservableProperty]
+		int totalSongs;
 		#endregion
 
 		#region Constructor 
@@ -86,6 +106,10 @@ namespace YTPlayer.ViewModels
 			isDownloadStarted = false;
 			commandState = CommandState.Play;
 			DesiredGlyph = "\ue037";
+			CurrentPosition = totalSongs = 0;
+			PlayingTime = 0;
+			CurrentTime = "0:00";
+
 			Link = "https://www.youtube.com/playlist?list=PL6KyLivlcdp5yGPBKCKvn4suAguD7heMT";
 
 			OnMusicFinished += MainPageViewModel_OnMusicFinished;
@@ -144,7 +168,6 @@ namespace YTPlayer.ViewModels
 			}
 		}
 
-
 		[RelayCommand]
 		async Task Stop()
 		{
@@ -179,6 +202,9 @@ namespace YTPlayer.ViewModels
 				isFirstLaunch = false;
 				Task.Run(StartDownloading);
 				Task.Run(MusicControl);
+
+				TotalDuration = CalculateTime(LinksDetails[CurrentPosition].video.Length);
+				TotalTime = LinksDetails[CurrentPosition].video.Length;
 			}
 		}
 
@@ -191,6 +217,8 @@ namespace YTPlayer.ViewModels
 				{
 					currentNode = currentNode.Next;
 					commandState = CommandState.Next;
+					CurrentPosition++;
+					CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
 					OnMusicFinished?.Invoke(this, EventArgs.Empty);
 				}
 			}
@@ -205,6 +233,8 @@ namespace YTPlayer.ViewModels
 				{
 					currentNode = currentNode.Previous;
 					commandState = CommandState.Previous;
+					CurrentPosition--;
+					CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
 					OnMusicFinished?.Invoke(this, EventArgs.Empty);
 				}
 			}
@@ -275,17 +305,27 @@ namespace YTPlayer.ViewModels
 							outputDevice = new();
 
 						using var audioFile = new AudioFileReader(Path.Combine(downloadLocation, $"{currentNode.Value.videoID}.mp3"));
+						audioFile.CurrentTime = new TimeSpan(0, 1, 50);
 						outputDevice.Init(audioFile);
 						outputDevice.Play();
 						TimeSpan audioTimeSpan = audioFile.TotalTime;
+						//TimeSpan audioTimeSpan = new TimeSpan(0, 1, 30);
 
+						bool tempCheck = true;
 						await Task.Run(() =>
 						{
-							while (!cts.IsCancellationRequested)
+							while (!cts.IsCancellationRequested && tempCheck)
 							{
 								TimeSpan currentTimeSpan = outputDevice.GetPositionTimeSpan();
+								string minutes = (currentTimeSpan.Minutes < 9) ? "0" + currentTimeSpan.Minutes : currentTimeSpan.Minutes.ToString();
+								string seconds = (currentTimeSpan.Seconds < 9) ? "0" + currentTimeSpan.Seconds : currentTimeSpan.Seconds.ToString();
+								CurrentTime = $"{minutes}:{seconds}";
+								PlayingTime = (int)currentTimeSpan.TotalSeconds;
+
+								Test = currentTimeSpan;
 								if (currentTimeSpan >= audioTimeSpan)
 								{
+									tempCheck = false;
 									break;
 								}
 
@@ -294,6 +334,7 @@ namespace YTPlayer.ViewModels
 									outputDevice.Pause();
 								}
 							}
+							Test = new TimeSpan(1, 0, 30);
 
 							//isPlaying = true;
 							if (cts.Token.IsCancellationRequested)
@@ -302,10 +343,12 @@ namespace YTPlayer.ViewModels
 							}
 						}, cts.Token);
 
+						Test = new TimeSpan(1, 0, 0);
 						if (currentNode.Next is not null && commandState == CommandState.Play)
 						{
 							currentNode = currentNode.Next;
 						}
+						Test = new TimeSpan(1, 30, 0);
 					}
 				}
 			}
@@ -336,14 +379,57 @@ namespace YTPlayer.ViewModels
 					//var root = JsonSerializer.Deserialize<Root>(theActualJson);
 					var videos = Videos.FromJson(theActualJson);
 
-
+					int ID = 0;
 					foreach (var video in VideoFinalData(videos))
 					{
 						if (video.PlaylistVideoRenderer is not null)
 						{
-							playList.AddLast(new QueueStruct { videoID = video.PlaylistVideoRenderer.VideoId });
+							ID++;
+
+							var videoData = video.PlaylistVideoRenderer;
+							string[] thumbnails = new string[2];
+							//int i = 0;
+							//foreach (var thumbnail in videoData.Thumbnail.Thumbnails)
+							//{
+							//	thumbnails[i++] = thumbnail.Url.AbsoluteUri;
+							//}
+							thumbnails[0] = videoData.Thumbnail.Thumbnails[2].Url.AbsoluteUri;
+
+							string replace = "maxresdefault.jpg";
+							string[] copy = thumbnails[0].Split('/');
+							if (copy.Length > 4)
+							{
+								copy[5] = replace;
+							}
+
+							StringBuilder sb = new();
+							sb.Append("https://i.ytimg.com/vi/");
+							sb.Append(copy[4]);
+							sb.Append('/');
+							sb.Append(replace);
+
+							// make http request to see if the pic is valid
+							HttpClient _client = new();
+							var _request = new HttpRequestMessage(HttpMethod.Get, sb.ToString());
+							using var response = await client.SendAsync(_request);
+
+							thumbnails[1] = (response.IsSuccessStatusCode) ? sb.ToString() : thumbnails[0];
+
+							Video vd = new()
+							{
+								Author = videoData.ShortBylineText.Runs[0].Text,
+								Title = videoData.Title.Runs[0].Text,
+								Length = videoData.LengthText.SimpleText,
+								Views = videoData.VideoInfo.Runs[0].Text,
+								When = videoData.VideoInfo.Runs[2].Text,
+								Thumbnails = thumbnails,
+							};
+
+							LinksDetails.Add(new() { ID = ID, Url = videoData.VideoId, video = vd });
+							playList.AddLast(new QueueStruct { id = ID, videoID = videoData.VideoId });
 							if (playList.Count == 1)
-								currentNode = playList.First;
+								CurrentImage = LinksDetails.First().video.Thumbnails[1];
+							//currentNode = playList.First;
 						}
 					}
 				}
@@ -354,7 +440,15 @@ namespace YTPlayer.ViewModels
 				WorkCompleted?.Invoke(this, stringArgs1);
 			}
 
-			Link = "";
+			Link = "Enter a new link!";
+			TotalSongs = LinksDetails.Count;
+			currentNode = playList.First;
+		}
+
+		[RelayCommand]
+		void ChangeToThis(Links entry)
+		{
+
 		}
 
 		void ChangeNodeValue(ref LinkedListNode<QueueStruct> tempNode)
@@ -362,6 +456,15 @@ namespace YTPlayer.ViewModels
 			var reference = tempNode.ValueRef;
 			reference = new QueueStruct { videoID = tempNode.Value.videoID, isDownloaded = true };
 			tempNode.ValueRef = reference;
+		}
+
+		int CalculateTime(string link)
+		{
+			string[] numbers = link.Split(":");
+			int minutes = Int32.Parse(numbers[0]);
+			int seconds = Int32.Parse(numbers[1]);
+
+			return minutes * 60 + seconds;
 		}
 
 		#endregion

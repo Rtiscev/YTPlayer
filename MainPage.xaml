@@ -7,41 +7,58 @@
     xmlns:viewmodels="clr-namespace:YTPlayer.ViewModels"
     x:DataType="viewmodels:MainPageViewModel">
 
-    <ScrollView>
-        <Grid RowDefinitions="*,*">
-            <HorizontalStackLayout>
-                <Image HeightRequest="100" WidthRequest="100">
-                    <Image.Source>
-                        <FileImageSource File="jm9aqrttxs181.gif" />
-                    </Image.Source>
-                </Image>
-            </HorizontalStackLayout>
+    <Frame>
+        <!--  main grid  -->
+        <Grid ColumnDefinitions="2*,*" RowDefinitions="auto,auto,*,auto">
 
-            <Grid Grid.Row="1" ColumnDefinitions="2*,auto">
+            <Grid
+                Grid.Row="0"
+                ColumnDefinitions="*,auto"
+                VerticalOptions="Start">
                 <Entry
                     Grid.Column="0"
                     BackgroundColor="White"
                     HeightRequest="20"
                     Text="{Binding Link}"
                     TextColor="Black" />
+                <Button
+                    Grid.Column="1"
+                    BackgroundColor="Transparent"
+                    BorderColor="Transparent"
+                    Command="{Binding AddToQueueCommand}">
+                    <Button.ImageSource>
+                        <FontImageSource
+                            FontFamily="MaterialOutlined"
+                            Glyph="&#xe03b;"
+                            Color="White" />
+                    </Button.ImageSource>
+                </Button>
+            </Grid>
 
+            <Image Grid.Row="1" Source="{Binding CurrentImage}" />
+            <Label Grid.Row="2" Text="{Binding Test}" />
+
+            <!--  text field and buttons  -->
+            <Grid
+                Grid.Row="3"
+                ColumnDefinitions="2*,auto"
+                VerticalOptions="End">
+
+                <Grid ColumnDefinitions="auto,*,auto">
+                    <Label Grid.Column="0" Text="{Binding CurrentTime}" />
+                    <Slider
+                        Grid.Column="1"
+                        Maximum="{Binding TotalDuration}"
+                        Minimum="0"
+                        ValueChanged="Slider_ValueChanged"
+                        Value="{Binding PlayingTime}" />
+                    <Label Grid.Column="2" Text="{Binding TotalTime}" />
+                </Grid>
+                <!--  buttons  -->
                 <Grid
                     Grid.Column="1"
                     BackgroundColor="Black"
                     ColumnDefinitions="auto,auto,auto,auto,auto">
-
-                    <Button
-                        Grid.Column="0"
-                        BackgroundColor="Transparent"
-                        BorderColor="Transparent"
-                        Command="{Binding AddToQueueCommand}">
-                        <Button.ImageSource>
-                            <FontImageSource
-                                FontFamily="MaterialOutlined"
-                                Glyph="&#xe03b;"
-                                Color="White" />
-                        </Button.ImageSource>
-                    </Button>
 
                     <Button
                         x:Name="PlayOrPauseButton"
@@ -94,7 +111,57 @@
                     </Button>
                 </Grid>
             </Grid>
+
+            <!--  queue list  -->
+            <VerticalStackLayout
+                Grid.Row="0"
+                Grid.RowSpan="2"
+                Grid.Column="1">
+
+                <Label>Queue</Label>
+                <HorizontalStackLayout>
+                    <Label Text="{Binding CurrentPosition}" />
+                    <Label>/</Label>
+                    <Label Text="{Binding TotalSongs}" />
+                </HorizontalStackLayout>
+
+                <CollectionView
+                    Margin="0,0,0,0"
+                    HeightRequest="900"
+                    ItemSizingStrategy="MeasureFirstItem"
+                    ItemsLayout="VerticalList"
+                    ItemsSource="{Binding LinksDetails}"
+                    VerticalScrollBarVisibility="Always">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="models:Links">
+                            <Frame>
+                                <Grid ColumnDefinitions="auto,2*,auto" RowDefinitions="*,*">
+                                    <AbsoluteLayout>
+                                        <Image Aspect="Fill" Source="{Binding video.Thumbnails[0]}" />
+                                        <Label
+                                            AbsoluteLayout.LayoutBounds="130,70"
+                                            BackgroundColor="Black"
+                                            Text="{Binding video.Length}" />
+                                    </AbsoluteLayout>
+                                    <VerticalStackLayout Grid.Column="1">
+                                        <Label LineBreakMode="WordWrap" Text="{Binding video.Title}" />
+                                        <Label Text="{Binding video.Author}" />
+                                        <Label Text="{Binding video.When}" />
+                                        <Label Text="{Binding video.Views}" />
+                                    </VerticalStackLayout>
+                                    <Button
+                                        Grid.Column="2"
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:MainPageViewModel}}, Path=ChangeToThisCommand}"
+                                        CommandParameter="{Binding}"
+                                        Text="Remove" />
+                                </Grid>
+                            </Frame>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+
+            </VerticalStackLayout>
         </Grid>
-    </ScrollView>
+    </Frame>
 
 </ContentPage>

@@ -13,8 +13,8 @@
         {
             var window = base.CreateWindow(activationState);
 
-            window.MinimumWidth = window.MaximumWidth = 600;
-            window.MinimumHeight = window.MaximumHeight = 200;
+			//window.Width =  DeviceDisplay.Current.MainDisplayInfo.Width;
+            //window.Height = DeviceDisplay.Current.MainDisplayInfo.Height;
 
             return window;
         }
