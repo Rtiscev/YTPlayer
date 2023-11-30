@@ -128,9 +128,9 @@
                 <CollectionView
                     Margin="0,0,0,0"
                     HeightRequest="900"
-                    ItemSizingStrategy="MeasureFirstItem"
                     ItemsLayout="VerticalList"
                     ItemsSource="{Binding LinksDetails}"
+                    ItemsUpdatingScrollMode="KeepScrollOffset"
                     VerticalScrollBarVisibility="Always">
                     <CollectionView.ItemTemplate>
                         <DataTemplate x:DataType="models:Links">
