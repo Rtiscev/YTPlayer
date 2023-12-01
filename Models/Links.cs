@@ -1,9 +1,11 @@
 ﻿namespace DownloadMusic.Models
 {
-    public class Links
-    {
-        public int ID { get; set; } 
-        public string Url { get; set; }
-        public Video video { get; set; }
-    }
+	public class Links
+	{
+		public int ID { get; set; }
+		public string Url { get; set; }
+		public Video video { get; set; }
+		public float Opacity { get; set; }
+	}
 }
+

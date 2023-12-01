@@ -1,0 +1,243 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="YTPlayer.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:models="clr-namespace:DownloadMusic.Models"
+    xmlns:viewmodels="clr-namespace:YTPlayer.ViewModels"
+    x:DataType="viewmodels:MainPageViewModel">
+
+    <!--  main grid  -->
+    <Grid
+        Padding="20,10,10,10"
+        ColumnDefinitions="1.5*,*"
+        ColumnSpacing="50"
+        RowDefinitions=".2*,*,.2*">
+
+        <Grid
+            Grid.Row="0"
+            ColumnDefinitions="*,auto"
+            VerticalOptions="Start">
+            <Entry
+                Grid.Column="0"
+                BackgroundColor="White"
+                HeightRequest="20"
+                Text="{Binding Link}"
+                TextColor="Black" />
+            <Button
+                Grid.Column="1"
+                BackgroundColor="Transparent"
+                BorderColor="Transparent"
+                Command="{Binding AddToQueueCommand}">
+                <Button.ImageSource>
+                    <FontImageSource
+                        FontFamily="MaterialOutlined"
+                        Glyph="&#xe03b;"
+                        Color="White" />
+                </Button.ImageSource>
+            </Button>
+        </Grid>
+
+        <Image Grid.Row="1" Source="{Binding CurrentImage}" />
+        <!--<Label Grid.Row="2" Text="{Binding Test}" />-->
+
+        <!--  text field and buttons  -->
+        <Grid
+            Grid.Row="3"
+            ColumnDefinitions="2*,auto"
+            VerticalOptions="End">
+
+            <Grid ColumnDefinitions="auto,*,auto">
+                <Label Grid.Column="0" Text="{Binding CurrentTime}" />
+                <Slider
+                    Grid.Column="1"
+                    Maximum="{Binding TotalDuration}"
+                    Minimum="0"
+                    ValueChanged="Slider_ValueChanged"
+                    Value="{Binding PlayingTime}" />
+                <Label Grid.Column="2" Text="{Binding TotalTime}" />
+            </Grid>
+            <!--  buttons  -->
+            <Grid
+                Grid.Column="1"
+                BackgroundColor="Black"
+                ColumnDefinitions="auto,auto,auto,auto,auto">
+
+                <Button
+                    x:Name="PlayOrPauseButton"
+                    Grid.Column="1"
+                    BackgroundColor="Transparent"
+                    BorderColor="Transparent"
+                    Command="{Binding PlayMusicCommand}">
+                    <Button.ImageSource>
+                        <FontImageSource
+                            FontFamily="MaterialOutlined"
+                            Glyph="{Binding DesiredGlyph}"
+                            Color="White" />
+                    </Button.ImageSource>
+                </Button>
+
+                <Button
+                    Grid.Column="2"
+                    BackgroundColor="Transparent"
+                    Command="{Binding PlayPreviousCommand}">
+                    <Button.ImageSource>
+                        <FontImageSource
+                            FontFamily="MaterialOutlined"
+                            Glyph="&#xe045;"
+                            Color="White" />
+                    </Button.ImageSource>
+                </Button>
+
+                <Button
+                    Grid.Column="3"
+                    BackgroundColor="Transparent"
+                    Command="{Binding PlayNextCommand}">
+                    <Button.ImageSource>
+                        <FontImageSource
+                            FontFamily="MaterialOutlined"
+                            Glyph="&#xe044;"
+                            Color="White" />
+                    </Button.ImageSource>
+                </Button>
+
+                <Button
+                    Grid.Column="4"
+                    BackgroundColor="Transparent"
+                    Command="{Binding StopCommand}">
+                    <Button.ImageSource>
+                        <FontImageSource
+                            FontFamily="MaterialOutlined"
+                            Glyph="&#xe047;"
+                            Color="White" />
+                    </Button.ImageSource>
+                </Button>
+            </Grid>
+        </Grid>
+
+        <!--  queue list  -->
+        <Grid
+            Grid.Row="0"
+            Grid.RowSpan="3"
+            Grid.Column="1"
+            RowDefinitions="auto,*">
+
+            <Label
+                Grid.Row="0"
+                FontSize="Header"
+                HorizontalTextAlignment="Center"
+                Text="Queue" />
+            <HorizontalStackLayout>
+                <Label Text="{Binding CurrentPosition}" />
+                <Label>/</Label>
+                <Label Text="{Binding TotalSongs}" />
+            </HorizontalStackLayout>
+
+            <CollectionView
+                Grid.Row="1"
+                ItemsLayout="VerticalList"
+                ItemsSource="{Binding LinksDetails}"
+                ItemsUpdatingScrollMode="KeepScrollOffset"
+                VerticalScrollBarVisibility="Always">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="models:Links">
+                        <Frame
+                            Margin="0,0,0,20"
+                            Padding="0"
+                            BackgroundColor="DarkRed"
+                            CornerRadius="10"
+                            HorizontalOptions="StartAndExpand">
+                            <Grid ColumnDefinitions="60,auto,*,auto" RowDefinitions="*,*">
+                                <Label
+                                    Grid.RowSpan="2"
+                                    Grid.Column="0"
+                                    FontSize="Large"
+                                    HorizontalTextAlignment="Center"
+                                    Text="{Binding ID}"
+                                    VerticalTextAlignment="Center" />
+                                <AbsoluteLayout
+                                    Grid.RowSpan="2"
+                                    Grid.Column="1"
+                                    Padding="0">
+                                    <Image Source="{Binding video.Thumbnails[0]}" />
+                                    <Label
+                                        AbsoluteLayout.LayoutBounds="1,1"
+                                        AbsoluteLayout.LayoutFlags="PositionProportional"
+                                        BackgroundColor="Black"
+                                        FontSize="Medium"
+                                        Text="{Binding video.Length}" />
+
+                                </AbsoluteLayout>
+                                <Grid
+                                    Grid.RowSpan="2"
+                                    Grid.Column="2"
+                                    Margin="0"
+                                    Padding="10"
+                                    ColumnDefinitions="*,*"
+                                    RowDefinitions="*,auto,auto"
+                                    RowSpacing="5">
+                                    <VerticalStackLayout Grid.ColumnSpan="2" Spacing="5">
+                                        <Label
+                                            FontAttributes="Bold"
+                                            LineBreakMode="HeadTruncation"
+                                            MaxLines="2"
+                                            Text="{Binding video.Title}" />
+                                        <Label FontAttributes="Italic" Text="{Binding video.Author}" />
+                                    </VerticalStackLayout>
+
+                                    <Grid
+                                        Grid.Row="1"
+                                        Grid.ColumnSpan="2"
+                                        ColumnDefinitions="*,25"
+                                        ColumnSpacing="5">
+                                        <Label
+                                            Grid.Column="0"
+                                            HorizontalOptions="End"
+                                            Text="{Binding video.When}" />
+                                        <Image Grid.Column="1">
+                                            <Image.Source>
+                                                <FontImageSource FontFamily="MaterialOutlined" Glyph="&#xe889;" />
+                                            </Image.Source>
+                                        </Image>
+                                    </Grid>
+                                    <Grid
+                                        Grid.Row="2"
+                                        Grid.ColumnSpan="2"
+                                        ColumnDefinitions="*,25"
+                                        ColumnSpacing="5">
+                                        <Label HorizontalOptions="End" Text="{Binding video.Views}" />
+                                        <Image Grid.Column="1">
+                                            <Image.Source>
+                                                <FontImageSource
+                                                    FontAutoScalingEnabled="False"
+                                                    FontFamily="MaterialOutlined"
+                                                    Glyph="&#xe8f4;" />
+                                            </Image.Source>
+                                        </Image>
+                                    </Grid>
+                                </Grid>
+                                <ImageButton
+                                    Grid.RowSpan="2"
+                                    Grid.Column="3"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodels:MainPageViewModel}}, Path=ChangeToThisCommand}"
+                                    CommandParameter="{Binding}"
+                                    VerticalOptions="FillAndExpand">
+                                    <ImageButton.Source>
+                                        <FontImageSource FontFamily="MaterialOutlined" Glyph="&#xe037;" />
+
+
+                                    </ImageButton.Source>
+                                </ImageButton>
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+        </Grid>
+    </Grid>
+
+</ContentPage>
+
+
+

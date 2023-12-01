@@ -9,9 +9,6 @@ using System.Diagnostics;
 using System.Text;
 using static DownloadMusic.Utility;
 
-
-// &#xe037
-
 namespace YTPlayer.ViewModels
 {
 	public partial class MainPageViewModel : ObservableObject
@@ -51,7 +48,6 @@ namespace YTPlayer.ViewModels
 		CancellationTokenSource cts;
 		CancellationTokenSource mainCts;
 		CommandState commandState;
-
 		#endregion
 
 		#region MVVM elements
@@ -77,6 +73,8 @@ namespace YTPlayer.ViewModels
 		string currentImage;
 		[ObservableProperty]
 		string currentTime;
+		[ObservableProperty]
+		float volume;
 		[ObservableProperty]
 		int playingTime;
 		[ObservableProperty]
@@ -130,8 +128,6 @@ namespace YTPlayer.ViewModels
 			ytdlpLocation = Path.Combine(rootPath, "tools\\yt-dlp.exe");
 			ffmpegLocation = Path.Combine(rootPath, "tools\\ffmpeg\\bin");
 		}
-
-
 		#endregion
 
 		#region Binding Commands
@@ -169,6 +165,39 @@ namespace YTPlayer.ViewModels
 		}
 
 		[RelayCommand]
+		void ChangeToThis(Links entry)
+		{
+			CommandState cmdState = CommandState.Play;
+			var tempNode = currentNode;
+
+			while (tempNode.Value.ID != entry.ID)
+			{
+				// start going right	
+				if (CurrentPosition > entry.ID)
+				{
+					cmdState = CommandState.Previous;
+					tempNode = tempNode.Previous;
+				}
+				// start going left
+				else if (CurrentPosition < entry.ID)
+				{
+					cmdState = CommandState.Next;
+					tempNode = tempNode.Next;
+				}
+				else if (CurrentPosition == entry.ID)
+				{
+					break;
+				}
+			}
+			if (tempNode.Value.isDownloaded)
+			{
+				currentNode = tempNode;
+				CurrentPosition = entry.ID;
+				PlaySpecific(cmdState);
+			}
+		}
+
+		[RelayCommand]
 		async Task Stop()
 		{
 			commandState = CommandState.Pause;
@@ -200,18 +229,8 @@ namespace YTPlayer.ViewModels
 				StringArgs stringArgs = new() { Title = "Pause" };
 				SetUpFinished?.Invoke(this, stringArgs);
 				isFirstLaunch = false;
-				Task.Run(StartDownloading);
+				//Task.Run(StartDownloading);
 				Task.Run(MusicControl);
-				//var downloading = StartDownloading();
-				//var controlMusic = MusicControl();
-
-				//await Task.Run(() =>
-				//{
-				//	downloading.Start();
-				//	controlMusic.Start();
-				//});
-
-				//Task.WhenAll(downloading, controlMusic);
 
 				TotalDuration = CalculateTime(LinksDetails[CurrentPosition].video.Length);
 				TotalTime = LinksDetails[CurrentPosition].video.Length;
@@ -261,23 +280,45 @@ namespace YTPlayer.ViewModels
 			}
 		}
 
-		async Task PlaySpecific(CommandState _commandState)
-		{
-			if (currentNode is not null)
-			{
-				commandState = _commandState;
-				CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
-				OnMusicFinished?.Invoke(this, EventArgs.Empty);
-			}
-		}
+		//[RelayCommand]
+		//async Task StartDownloading()
+		//{
+		//	// check if these items exist
+		//	// grab all files from a cache folder
+		//	DirectoryInfo folderInfo = new(downloadLocation);
+		//	HashSet<String> audioFiles = new(folderInfo.GetFiles()
+		//		.Select(file => Path.GetFileNameWithoutExtension(file.Name))
+		//		.ToList());
 
-		async void MainPageViewModel_OnMusicFinished(object sender, EventArgs e)
-		{
-			cts.Cancel();
-		}
+		//	for (var tempNode = playList.First; tempNode != null; tempNode = tempNode.Next)
+		//	{
+		//		// if it's already downloaded go next
+		//		if (audioFiles.Contains(tempNode.Value.videoID))
+		//		{
+		//			ChangeNodeValue(ref tempNode);
+		//			continue;
+		//		}
 
-		[RelayCommand]
-		async Task StartDownloading()
+		//		// if it doesnt exist then download the file
+		//		using (Process dlProcess = new())
+		//		{
+		//			// set up process properties
+		//			dlProcess.StartInfo.FileName = ytdlpLocation;
+		//			dlProcess.StartInfo.CreateNoWindow = true;
+		//			dlProcess.StartInfo.UseShellExecute = false;
+		//			dlProcess.StartInfo.RedirectStandardOutput = true;
+
+		//			dlProcess.StartInfo.Arguments = $"-P {downloadLocation} -x --extract-audio --audio-format mp3 --audio-quality 320K {tempNode.Value.videoID} --ffmpeg-location \"{ffmpegLocation}\" --no-playlist -o \"%(id)s.%(ext)s\"";
+
+		//			dlProcess.Start();
+		//			await dlProcess.WaitForExitAsync();
+		//		}
+		//		// mark this item as downloaded
+		//		ChangeNodeValue(ref tempNode);
+		//	}
+		//}
+
+		async Task DownloadSong(LinkedListNode<QueueStruct> tempNode)
 		{
 			// check if these items exist
 			// grab all files from a cache folder
@@ -286,16 +327,14 @@ namespace YTPlayer.ViewModels
 				.Select(file => Path.GetFileNameWithoutExtension(file.Name))
 				.ToList());
 
-			for (var tempNode = playList.First; tempNode != null; tempNode = tempNode.Next)
+			// if it's already downloaded go next
+			if (audioFiles.Contains(tempNode.Value.videoID))
 			{
-				// if it's already downloaded go next
-				if (audioFiles.Contains(tempNode.Value.videoID))
-				{
-					ChangeNodeValue(ref tempNode);
-					continue;
-				}
-
-				// if it doesnt exist then download the file
+				ChangeNodeValue(ref tempNode);
+			}
+			// if it doesnt exist then download the file
+			else
+			{
 				using (Process dlProcess = new())
 				{
 					// set up process properties
@@ -313,9 +352,24 @@ namespace YTPlayer.ViewModels
 				ChangeNodeValue(ref tempNode);
 			}
 		}
+
+		async Task PlaySpecific(CommandState _commandState)
+		{
+			if (currentNode is not null)
+			{
+				commandState = _commandState;
+				CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
+				OnMusicFinished?.Invoke(this, EventArgs.Empty);
+			}
+		}
+
+		async void MainPageViewModel_OnMusicFinished(object sender, EventArgs e)
+		{
+			cts?.Cancel();
+		}
 		#endregion
 
-		#region Helper Methods
+		#region Comands
 		async Task MusicControl()
 		{
 			while (true)
@@ -335,6 +389,7 @@ namespace YTPlayer.ViewModels
 						outputDevice ??= new();
 
 						using var audioFile = new AudioFileReader(Path.Combine(downloadLocation, $"{currentNode.Value.videoID}.mp3"));
+						//audioFile.Volume = Volume;
 						audioFile.CurrentTime = new TimeSpan(0, 1, 30);
 						outputDevice.Init(audioFile);
 						outputDevice.Play();
@@ -342,10 +397,9 @@ namespace YTPlayer.ViewModels
 						//TimeSpan audioTimeSpan = audioFile.TotalTime;
 						//TimeSpan audioTimeSpan = new TimeSpan(0, 1, 30);
 
-						bool tempCheck = true;
 						await Task.Run(() =>
 						{
-							while (!cts.IsCancellationRequested && tempCheck)
+							while (!cts.IsCancellationRequested)
 							{
 								TimeSpan currentTimeSpan = outputDevice.GetPositionTimeSpan();
 								string minutes = (currentTimeSpan.Minutes < 9) ? "0" + currentTimeSpan.Minutes : currentTimeSpan.Minutes.ToString();
@@ -354,11 +408,6 @@ namespace YTPlayer.ViewModels
 								PlayingTime = (int)currentTimeSpan.TotalSeconds;
 
 								Test = currentTimeSpan;
-								//if (currentTimeSpan >= audioTimeSpan)
-								//{
-								//	tempCheck = false;
-								//	break;
-								//}
 
 								if (commandState == CommandState.Pause)
 								{
@@ -460,6 +509,7 @@ namespace YTPlayer.ViewModels
 
 							LinksDetails.Add(new() { ID = ID, Url = videoData.VideoId, video = vd });
 							playList.AddLast(new QueueStruct { ID = ID, videoID = videoData.VideoId });
+							DownloadSong(playList.Last);
 							if (playList.Count == 1)
 							{
 								CurrentImage = LinksDetails.First().video.Thumbnails[1];
@@ -477,41 +527,8 @@ namespace YTPlayer.ViewModels
 
 			Link = "Enter a new link!";
 			TotalSongs = LinksDetails.Count;
-			//currentNode = playList.First;
 		}
 
-		[RelayCommand]
-		void ChangeToThis(Links entry)
-		{
-			CommandState cmdState = CommandState.Play;
-			var tempNode = currentNode;
-
-			while (tempNode.Value.ID != entry.ID)
-			{
-				// start going right	
-				if (CurrentPosition > entry.ID)
-				{
-					cmdState = CommandState.Previous;
-					tempNode = tempNode.Previous;
-				}
-				// start going left
-				else if (CurrentPosition < entry.ID)
-				{
-					cmdState = CommandState.Next;
-					tempNode = tempNode.Next;
-				}
-				else if (CurrentPosition == entry.ID)
-				{
-					break;
-				}
-			}
-			if (tempNode.Value.isDownloaded)
-			{
-				currentNode = tempNode;
-				CurrentPosition = entry.ID;
-				PlaySpecific(cmdState);
-			}
-		}
 		void ChangeNodeValue(ref LinkedListNode<QueueStruct> tempNode)
 		{
 			var reference = tempNode.ValueRef;
@@ -527,7 +544,13 @@ namespace YTPlayer.ViewModels
 
 			return minutes * 60 + seconds;
 		}
-
 		#endregion
 	}
 }
+
+
+
+
+
+
+
