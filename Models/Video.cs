@@ -7,7 +7,8 @@
 		public string[] Thumbnails { get; set; }
 		public string Length { get; set; }
 		public string Views { get; set; }
-		public string When{ get; set; }
+		public string When { get; set; }
+		public Color Color { get; set; }
 	}
 }
 

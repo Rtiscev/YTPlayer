@@ -3,7 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using DownloadMusic.Models;
 using NAudio.Utils;
 using NAudio.Wave;
-using QuickType;
+using CodeBeautify;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Text;
@@ -16,7 +16,7 @@ namespace YTPlayer.ViewModels
 		#region General elements
 		enum CommandState
 		{
-			Play, Pause, Next, Previous, Stop
+			Play, Pause, Next, Previous, Stop, ChangeTime
 		}
 		struct QueueStruct
 		{
@@ -29,17 +29,24 @@ namespace YTPlayer.ViewModels
 				isDownloaded = false;
 			}
 		}
+		struct TaskDetails
+		{
+			public LinkedListNode<QueueStruct> node { get; set; }
+			public int ID { get; set; }
+		}
 		public event EventHandler<StringArgs> WorkCompleted;
 		public event EventHandler<StringArgs> SetUpFinished;
 
 		string downloadLocation;
+		TimeSpan globalTime;
 		string ytdlpLocation;
 		string ffmpegLocation;
 		string rootPath;
 		bool isPlaying;
-		bool isPaused;
-		bool isDownloadStarted;
 		bool isFirstLaunch;
+		bool isFinished;
+		bool isTimeDraggin = false;
+		bool isVolumeDragging = false;
 
 		WasapiOut outputDevice;
 		LinkedList<QueueStruct> playList;
@@ -47,7 +54,11 @@ namespace YTPlayer.ViewModels
 		event EventHandler OnMusicFinished;
 		CancellationTokenSource cts;
 		CancellationTokenSource mainCts;
+		SemaphoreSlim semaphore = new(3);
+		Queue<TaskDetails> DownloadTasks;
 		CommandState commandState;
+		int _playingTime;
+		TimeSpan sliderTimeCopy;
 		#endregion
 
 		#region MVVM elements
@@ -68,47 +79,50 @@ namespace YTPlayer.ViewModels
 		[ObservableProperty]
 		ObservableCollection<Links> linksDetails;
 		[ObservableProperty]
+		int currentPosition;
+		[ObservableProperty]
+		int totalDuration;
+		[ObservableProperty]
+		int sliderTime;
+		[ObservableProperty]
+		int totalSongs;
+		[ObservableProperty]
 		string nowPlaying;
 		[ObservableProperty]
 		string currentImage;
 		[ObservableProperty]
 		string currentTime;
 		[ObservableProperty]
-		float volume;
+		int volume;
 		[ObservableProperty]
 		int playingTime;
 		[ObservableProperty]
 		string totalTime;
-		[ObservableProperty]
-		int currentPosition;
-		[ObservableProperty]
-		int totalDuration;
-		[ObservableProperty]
-		TimeSpan test;
-		[ObservableProperty]
-		int totalSongs;
 		#endregion
 
 		#region Constructor 
 		public MainPageViewModel()
 		{
-			//outputDevice = new();
+			DownloadTasks = new();
 			linksDetails = new();
 			playList = new();
 			mainCts = new();
-			isFirstLaunch = true;
-			isPlaying = false;
-			isPaused = true;
-			IsButtonActive = true;
-			IsTextActive = true;
-			isDownloadStarted = false;
+			SliderTime = 0;
+			Volume = 50;
+			sliderTimeCopy = TimeSpan.Zero;
+
+			isFirstLaunch = IsTextActive = IsButtonActive = true;
+			isFinished = isPlaying = false;
+			CurrentPosition = PlayingTime = totalSongs = 0;
+
 			commandState = CommandState.Play;
 			DesiredGlyph = "\ue037";
-			CurrentPosition = totalSongs = 0;
-			PlayingTime = 0;
-			CurrentTime = "0:00";
+			TotalTime = CurrentTime = "00:00";
 
-			Link = "https://www.youtube.com/playlist?list=PL6KyLivlcdp5yGPBKCKvn4suAguD7heMT";
+
+			//https://www.youtube.com/playlist?list=PLpwXRl6e3zt_G2Rl-mrLHoDavYpy2Iiwi
+			Link = "https://www.youtube.com/playlist?list=PLpwXRl6e3zt_G2Rl-mrLHoDavYpy2Iiwi";
+			//Link = "https://www.youtube.com/playlist?list=PL6KyLivlcdp5yGPBKCKvn4suAguD7heMT";
 
 			OnMusicFinished += MainPageViewModel_OnMusicFinished;
 
@@ -159,7 +173,7 @@ namespace YTPlayer.ViewModels
 			}
 			else
 			{
-				StringArgs stringArgs = new StringArgs { Title = "Text is empty" };
+				StringArgs stringArgs = new() { Title = "Text is empty" };
 				WorkCompleted?.Invoke(this, stringArgs);
 			}
 		}
@@ -210,7 +224,8 @@ namespace YTPlayer.ViewModels
 			StringArgs stringArgs = new() { Title = "Pause" };
 			SetUpFinished?.Invoke(this, stringArgs);
 			commandState = CommandState.Play;
-			outputDevice.Play();
+			outputDevice?.Play();
+			DesiredGlyph = "\ue034";
 		}
 
 		[RelayCommand]
@@ -219,6 +234,8 @@ namespace YTPlayer.ViewModels
 			StringArgs stringArgs = new() { Title = "Resume" };
 			SetUpFinished?.Invoke(this, stringArgs);
 			commandState = CommandState.Pause;
+			outputDevice?.Pause();
+			DesiredGlyph = "\ue037";
 		}
 
 		[RelayCommand]
@@ -229,8 +246,8 @@ namespace YTPlayer.ViewModels
 				StringArgs stringArgs = new() { Title = "Pause" };
 				SetUpFinished?.Invoke(this, stringArgs);
 				isFirstLaunch = false;
-				//Task.Run(StartDownloading);
 				Task.Run(MusicControl);
+				DesiredGlyph = "\ue034";
 
 				TotalDuration = CalculateTime(LinksDetails[CurrentPosition].video.Length);
 				TotalTime = LinksDetails[CurrentPosition].video.Length;
@@ -245,10 +262,26 @@ namespace YTPlayer.ViewModels
 				if (currentNode.Next is not null && currentNode.Value.isDownloaded)
 				{
 					currentNode = currentNode.Next;
-					commandState = CommandState.Next;
+					if (commandState != CommandState.Pause)
+					{
+						commandState = CommandState.Next;
+					}
+
 					CurrentPosition++;
+					if (!isFinished)
+					{
+						OnMusicFinished?.Invoke(this, EventArgs.Empty);
+					}
+					isFinished = isTimeDraggin = false;
+
+					// time setup
+					CurrentTime = "00:00";
+					sliderTimeCopy = TimeSpan.Zero;
+					TotalDuration = CalculateTime(LinksDetails[CurrentPosition].video.Length);
+					SliderTime = 0;
+					TotalTime = LinksDetails[CurrentPosition].video.Length;
+
 					CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
-					OnMusicFinished?.Invoke(this, EventArgs.Empty);
 				}
 				else if (!currentNode.Value.isDownloaded)
 				{
@@ -265,12 +298,24 @@ namespace YTPlayer.ViewModels
 			{
 				if (currentNode.Previous is not null && currentNode.Value.isDownloaded)
 				{
-
+					if (commandState != CommandState.Pause)
+					{
+						commandState = CommandState.Previous;
+					}
 					currentNode = currentNode.Previous;
-					commandState = CommandState.Previous;
 					CurrentPosition--;
-					CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
+
 					OnMusicFinished?.Invoke(this, EventArgs.Empty);
+
+
+					isTimeDraggin = false;
+					// time setup
+					CurrentTime = "00:00";
+					TotalDuration = CalculateTime(LinksDetails[CurrentPosition].video.Length);
+					SliderTime = 0;
+					TotalTime = LinksDetails[CurrentPosition].video.Length;
+
+					CurrentImage = LinksDetails[CurrentPosition].video.Thumbnails[1];
 				}
 				else if (!currentNode.Value.isDownloaded)
 				{
@@ -280,76 +325,97 @@ namespace YTPlayer.ViewModels
 			}
 		}
 
-		//[RelayCommand]
-		//async Task StartDownloading()
-		//{
-		//	// check if these items exist
-		//	// grab all files from a cache folder
-		//	DirectoryInfo folderInfo = new(downloadLocation);
-		//	HashSet<String> audioFiles = new(folderInfo.GetFiles()
-		//		.Select(file => Path.GetFileNameWithoutExtension(file.Name))
-		//		.ToList());
-
-		//	for (var tempNode = playList.First; tempNode != null; tempNode = tempNode.Next)
-		//	{
-		//		// if it's already downloaded go next
-		//		if (audioFiles.Contains(tempNode.Value.videoID))
-		//		{
-		//			ChangeNodeValue(ref tempNode);
-		//			continue;
-		//		}
-
-		//		// if it doesnt exist then download the file
-		//		using (Process dlProcess = new())
-		//		{
-		//			// set up process properties
-		//			dlProcess.StartInfo.FileName = ytdlpLocation;
-		//			dlProcess.StartInfo.CreateNoWindow = true;
-		//			dlProcess.StartInfo.UseShellExecute = false;
-		//			dlProcess.StartInfo.RedirectStandardOutput = true;
-
-		//			dlProcess.StartInfo.Arguments = $"-P {downloadLocation} -x --extract-audio --audio-format mp3 --audio-quality 320K {tempNode.Value.videoID} --ffmpeg-location \"{ffmpegLocation}\" --no-playlist -o \"%(id)s.%(ext)s\"";
-
-		//			dlProcess.Start();
-		//			await dlProcess.WaitForExitAsync();
-		//		}
-		//		// mark this item as downloaded
-		//		ChangeNodeValue(ref tempNode);
-		//	}
-		//}
-
-		async Task DownloadSong(LinkedListNode<QueueStruct> tempNode)
+		[RelayCommand]
+		async Task TimeDragCompleted()
 		{
-			// check if these items exist
-			// grab all files from a cache folder
-			DirectoryInfo folderInfo = new(downloadLocation);
-			HashSet<String> audioFiles = new(folderInfo.GetFiles()
-				.Select(file => Path.GetFileNameWithoutExtension(file.Name))
-				.ToList());
-
-			// if it's already downloaded go next
-			if (audioFiles.Contains(tempNode.Value.videoID))
+			if (commandState != CommandState.Pause)
 			{
-				ChangeNodeValue(ref tempNode);
+				OnMusicFinished?.Invoke(this, EventArgs.Empty);
 			}
-			// if it doesnt exist then download the file
-			else
+
+			sliderTimeCopy = TimeSpan.FromSeconds(SliderTime);
+			commandState = CommandState.ChangeTime;
+		}
+
+		[RelayCommand]
+		async Task TimeDragStarted()
+		{
+			isTimeDraggin = true;
+		}
+
+		[RelayCommand]
+		async Task VolumeDragStarted()
+		{
+			isVolumeDragging = true;
+		}
+
+		[RelayCommand]
+		async Task VolumeDragCompleted()
+		{
+			//outputDevice?.Pause();
+			//outputDevice?.Play();
+			sliderTimeCopy = globalTime;
+
+			OnMusicFinished?.Invoke(this, EventArgs.Empty);
+		}
+
+		async Task DownloadSong(LinkedListNode<QueueStruct> tempNode, int ID)
+		{
+			await semaphore.WaitAsync();
+			try
 			{
-				using (Process dlProcess = new())
+				// check if these items exist
+				// grab all files from a cache folder
+				DirectoryInfo folderInfo = new(downloadLocation);
+				HashSet<String> audioFiles = new(folderInfo.GetFiles()
+					.Select(file => Path.GetFileNameWithoutExtension(file.Name))
+					.ToList());
+
+				// if it's already downloaded go next
+				if (audioFiles.Contains(tempNode.Value.videoID))
 				{
-					// set up process properties
-					dlProcess.StartInfo.FileName = ytdlpLocation;
-					dlProcess.StartInfo.CreateNoWindow = true;
-					dlProcess.StartInfo.UseShellExecute = false;
-					dlProcess.StartInfo.RedirectStandardOutput = true;
-
-					dlProcess.StartInfo.Arguments = $"-P {downloadLocation} -x --extract-audio --audio-format mp3 --audio-quality 320K {tempNode.Value.videoID} --ffmpeg-location \"{ffmpegLocation}\" --no-playlist -o \"%(id)s.%(ext)s\"";
-
-					dlProcess.Start();
-					await dlProcess.WaitForExitAsync();
+					ChangeNodeValue(ref tempNode);
 				}
-				// mark this item as downloaded
-				ChangeNodeValue(ref tempNode);
+				// if it doesnt exist then download the file
+				else
+				{
+					using (Process dlProcess = new())
+					{
+						// set up process properties
+						dlProcess.StartInfo.FileName = ytdlpLocation;
+						dlProcess.StartInfo.CreateNoWindow = true;
+						dlProcess.StartInfo.UseShellExecute = false;
+						dlProcess.StartInfo.RedirectStandardOutput = true;
+
+						dlProcess.StartInfo.Arguments = $"-P {downloadLocation} -x --extract-audio --audio-format mp3 --audio-quality 320K {tempNode.Value.videoID} --ffmpeg-location \"{ffmpegLocation}\" --no-playlist -o \"%(id)s.%(ext)s\"";
+
+						dlProcess.Start();
+						await dlProcess.WaitForExitAsync();
+					}
+					// mark this item as downloaded
+					ChangeNodeValue(ref tempNode);
+
+					// update UI
+					//Image doneImg = new()
+					//{
+					//	Source = new FontImageSource() { FontFamily = "Material", Glyph = "\ue876", Size = 36, Color = Colors.Chocolate }
+					//};
+
+				}
+				ImageButton imageButton = new()
+				{
+					Command = ChangeToThisCommand,
+					CommandParameter = LinksDetails[ID],
+					Source = new FontImageSource { FontFamily = "MaterialOutlined", Glyph = "\ue037" }
+				};
+
+				var holder2 = LinksDetails[ID];
+				holder2.Img = imageButton;
+				LinksDetails[ID] = holder2;
+			}
+			finally
+			{
+				semaphore.Release();
 			}
 		}
 
@@ -365,6 +431,7 @@ namespace YTPlayer.ViewModels
 
 		async void MainPageViewModel_OnMusicFinished(object sender, EventArgs e)
 		{
+			//if (isFinished)
 			cts?.Cancel();
 		}
 		#endregion
@@ -374,7 +441,7 @@ namespace YTPlayer.ViewModels
 		{
 			while (true)
 			{
-				if (!isPlaying || outputDevice?.PlaybackState == PlaybackState.Playing)
+				if ((!isPlaying || outputDevice?.PlaybackState == PlaybackState.Playing) && commandState != CommandState.Pause)
 				{
 					if (outputDevice is not null)
 					{
@@ -383,57 +450,105 @@ namespace YTPlayer.ViewModels
 					}
 
 					cts = new();
+
+					if (commandState == CommandState.ChangeTime)
+					{
+						isTimeDraggin = false;
+					}
+
+					isFinished = false;
 					commandState = CommandState.Play;
 					if (currentNode is not null && currentNode.Value.isDownloaded)
 					{
 						outputDevice ??= new();
 
 						using var audioFile = new AudioFileReader(Path.Combine(downloadLocation, $"{currentNode.Value.videoID}.mp3"));
-						//audioFile.Volume = Volume;
-						audioFile.CurrentTime = new TimeSpan(0, 1, 30);
+
+						audioFile.CurrentTime = sliderTimeCopy;
 						outputDevice.Init(audioFile);
+						audioFile.Volume = Volume / 100f;
 						outputDevice.Play();
-						outputDevice.PlaybackStopped += OutputDevice_PlaybackStopped;
-						//TimeSpan audioTimeSpan = audioFile.TotalTime;
-						//TimeSpan audioTimeSpan = new TimeSpan(0, 1, 30);
+						//outputDevice.PlaybackStopped += OutputDevice_PlaybackStopped;
 
 						await Task.Run(() =>
 						{
-							while (!cts.IsCancellationRequested)
+							while (!cts.IsCancellationRequested && outputDevice.PlaybackState == PlaybackState.Playing)
 							{
-								TimeSpan currentTimeSpan = outputDevice.GetPositionTimeSpan();
-								string minutes = (currentTimeSpan.Minutes < 9) ? "0" + currentTimeSpan.Minutes : currentTimeSpan.Minutes.ToString();
-								string seconds = (currentTimeSpan.Seconds < 9) ? "0" + currentTimeSpan.Seconds : currentTimeSpan.Seconds.ToString();
-								CurrentTime = $"{minutes}:{seconds}";
-								PlayingTime = (int)currentTimeSpan.TotalSeconds;
-
-								Test = currentTimeSpan;
-
+								TimeSpan currentTimeSpan = outputDevice.GetPositionTimeSpan() + sliderTimeCopy;
+								globalTime = currentTimeSpan;
 								if (commandState == CommandState.Pause)
 								{
-									outputDevice.Pause();
+									sliderTimeCopy = currentTimeSpan;
+									outputDevice?.Pause();
+									break;
 								}
+
+								string minutes = (currentTimeSpan.Minutes <= 9) ? "0" + currentTimeSpan.Minutes.ToString() : currentTimeSpan.Minutes.ToString();
+								string seconds = (currentTimeSpan.Seconds <= 9) ? "0" + currentTimeSpan.Seconds.ToString() : currentTimeSpan.Seconds.ToString();
+
+								CurrentTime = $"{minutes}:{seconds}";
+
+								if (!isTimeDraggin)
+								{
+									SliderTime = currentTimeSpan.Minutes * 60 + currentTimeSpan.Seconds;
+								}
+
+								//_playingTime = CalculateTime(CurrentTime);
+								//Link = (TotalDuration - _playingTime).ToString();
 							}
-							//isPlaying = true;
 							if (cts.Token.IsCancellationRequested)
 							{
 								// just for debugging purposes
 							}
+
 						}, cts.Token);
 
-						if (currentNode.Next is not null && commandState == CommandState.Play)
+						if (currentNode.Next is not null)
 						{
-							//currentNode = currentNode.Next;
-							PlayNext();
+							//if (commandState == CommandState.Play && isFinished)
+							if (commandState == CommandState.Play && outputDevice.PlaybackState == PlaybackState.Stopped)
+							{
+								//currentNode = currentNode.Next;
+								CurrentTime = "00:00";
+								SliderTime = 0;
+								PlayNext();
+							}
 						}
 					}
 				}
 			}
 		}
 
+		async Task DownloadControl()
+		{
+			while (true)
+			{
+				if (DownloadTasks.Count > 2)
+				{
+					// make a list of tasks
+					var tasks = new List<Task>();
+					for (int i = 0; i < 3; i++)
+					{
+						var item = DownloadTasks.Dequeue();
+						tasks.Add(DownloadSong(item.node, item.ID));
+					}
+
+					await Task.WhenAll(tasks);
+				}
+			}
+		}
+
 		private void OutputDevice_PlaybackStopped(object sender, StoppedEventArgs e)
 		{
-			cts.Cancel();
+			// calculate time
+			int _playingTime = CalculateTime(CurrentTime);
+			if (TotalDuration - _playingTime <= 0)
+			{
+				cts?.Cancel();
+				//if (!isTimeDraggin)
+				//{
+				//}
+			}
 		}
 
 		async Task AddPlaylist()
@@ -445,11 +560,6 @@ namespace YTPlayer.ViewModels
 				{
 					string responseContent = RequestFunc(client, Link);
 
-					//int mainIndex = responseContent.IndexOf("\"webResponseContextExtensionData\"");
-					//int contentIndex = responseContent.IndexOf("\"contents\"", mainIndex);
-					//int headerIndex = responseContent.IndexOf("\"header\"", contentIndex);
-					//string theActualJson = GetTheBody(responseContent, contentIndex, headerIndex);
-
 					string patternWeb = "\"webResponseContextExtensionData\"";
 					int mainIndex = responseContent.IndexOf(patternWeb);
 					string patternContent = "\"contents\"";
@@ -458,10 +568,15 @@ namespace YTPlayer.ViewModels
 					int patternIndex = responseContent.IndexOf(patternHeader, contentIndex);
 					string theActualJson = GetTheBody(responseContent, contentIndex, patternIndex);
 
-					//var root = JsonSerializer.Deserialize<Root>(theActualJson);
-					var videos = Videos.FromJson(theActualJson);
+
+					var videos = Welcome10.FromJson(theActualJson);
+					//var videos = Videos.FromJson(theActualJson);
 
 					int ID = -1;
+
+					//Stopwatch stopwatch = new();
+					//stopwatch.Start();
+
 					foreach (var video in VideoFinalData(videos))
 					{
 						if (video.PlaylistVideoRenderer is not null)
@@ -469,14 +584,9 @@ namespace YTPlayer.ViewModels
 							ID++;
 
 							var videoData = video.PlaylistVideoRenderer;
-							string[] thumbnails = new string[2];
-							//int i = 0;
-							//foreach (var thumbnail in videoData.Thumbnail.Thumbnails)
-							//{
-							//	thumbnails[i++] = thumbnail.Url.AbsoluteUri;
-							//}
-							thumbnails[0] = videoData.Thumbnail.Thumbnails[2].Url.AbsoluteUri;
 
+							string[] thumbnails = new string[2];
+							thumbnails[0] = videoData.Thumbnail.Thumbnails[2].Url.AbsoluteUri;
 							string replace = "maxresdefault.jpg";
 							string[] copy = thumbnails[0].Split('/');
 							if (copy.Length > 4)
@@ -490,7 +600,6 @@ namespace YTPlayer.ViewModels
 							sb.Append('/');
 							sb.Append(replace);
 
-							// make http request to see if the pic is valid
 							HttpClient _client = new();
 							var _request = new HttpRequestMessage(HttpMethod.Get, sb.ToString());
 							using var response = await _client.SendAsync(_request);
@@ -505,23 +614,32 @@ namespace YTPlayer.ViewModels
 								Views = videoData.VideoInfo.Runs[0].Text,
 								When = videoData.VideoInfo.Runs[2].Text,
 								Thumbnails = thumbnails,
+								Color = Colors.Red
 							};
 
-							LinksDetails.Add(new() { ID = ID, Url = videoData.VideoId, video = vd });
+							ActivityIndicator activityIndicator = new() { IsRunning = true, Color = Colors.BlueViolet };
+
+							LinksDetails.Add(new() { ID = ID, Url = videoData.VideoId, video = vd, Img = activityIndicator });
 							playList.AddLast(new QueueStruct { ID = ID, videoID = videoData.VideoId });
-							DownloadSong(playList.Last);
+
 							if (playList.Count == 1)
 							{
 								CurrentImage = LinksDetails.First().video.Thumbnails[1];
 								currentNode = playList.First;
 							}
+
+							//downloadTasks.Push(downloadSongTask);
+							DownloadTasks.Enqueue(new() { node = playList.Last, ID = ID });
+							DownloadSong(playList.Last, ID);
 						}
 					}
+					//stopwatch.Stop();
+					//var totalTime = stopwatch.ElapsedMilliseconds;
 				}
 			}
 			catch (Exception e)
 			{
-				StringArgs stringArgs1 = new() { Title = "Not a valid playlist link" };
+				StringArgs stringArgs1 = new() { Title = "Error!" };
 				WorkCompleted?.Invoke(this, stringArgs1);
 			}
 

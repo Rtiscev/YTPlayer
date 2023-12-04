@@ -5,7 +5,8 @@
 		public int ID { get; set; }
 		public string Url { get; set; }
 		public Video video { get; set; }
-		public float Opacity { get; set; }
+		public View Img { get; set; }
 	}
 }
+
 

@@ -1,5 +1,8 @@
-﻿using System.Text;
-using QuickType;
+﻿using CodeBeautify;
+using System.Text;
+using CodeBeautify;
+
+//using QuickType;
 
 namespace DownloadMusic
 {
@@ -54,7 +57,7 @@ namespace DownloadMusic
 			return stringBuilder.ToString();
 		}
 
-		public static List<PlaylistVideoListRendererContent> VideoFinalData(Videos videos)
+		public static PlaylistVideoListRendererContent[] VideoFinalData(Welcome10 videos)
 		{
 			//return root.contents.twoColumnBrowseResultsRenderer.tabs[0]
 			//                            .tabRenderer
